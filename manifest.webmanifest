@@ -1,0 +1,15 @@
+{
+  "name": "Twelve Skies",
+  "short_name": "Twelve Skies",
+  "description": "A calm sky-color clock with memories, family traditions and the twelve Chinese zodiac hours.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#1D1850",
+  "theme_color": "#1D1850",
+  "icons": [
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" },
+    { "src": "app-icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
