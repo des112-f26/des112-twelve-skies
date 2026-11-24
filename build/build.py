@@ -55,7 +55,7 @@ page = f"""<!doctype html>
   /* ---- The app: fixed at iPhone size (390 x 844) on desktop ---- */
   #app {{ position: relative; overflow: hidden; flex-shrink: 0; width: 390px; height: 844px; }}
   /* ---- On a phone the app fills the screen ---- */
-  body.phone {{ position: fixed; top: 0; left: 0; right: 0; height: 100vh; height: 100lvh; overflow: hidden; overscroll-behavior: none; background: #1D1850; }}   /* full screen, even behind the browser toolbar */
+  body.phone {{ position: fixed; top: 0; left: 0; right: 0; overflow: hidden; overscroll-behavior: none; background: #1D1850; }}   /* full screen, even behind the browser toolbar */
   body.phone .page {{ margin: 0; padding: 0; }}
   body.phone #brand {{ display: none; }}
   #safe-probe {{ position: fixed; top: 0; left: 0; width: 0; height: 100vh; height: 100lvh; padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); visibility: hidden; pointer-events: none; }}   /* measures the notch, home bar and screen height */
@@ -84,8 +84,11 @@ page = f"""<!doctype html>
   var APP_W = 390, APP_H = 844;
   var app = document.getElementById('app');
   var probe = document.getElementById('safe-probe');
+  function isStandalone() {{
+    return window.navigator.standalone === true || !!(window.matchMedia && matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches);
+  }}
   function isPhone() {{
-    var standalone = window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches);
+    var standalone = isStandalone();
     var coarse = window.matchMedia && matchMedia('(pointer: coarse)').matches;
     var shortSide = Math.min(screen.width, screen.height);
     return standalone || (coarse && shortSide < 600);
@@ -99,7 +102,15 @@ page = f"""<!doctype html>
       // clear of the notch / Dynamic Island at the top and the home bar or toolbar at the bottom.
       var cs = getComputedStyle(probe);
       var seen = window.innerHeight, full = Math.max(seen, parseFloat(cs.height) || 0);
-      var safeT = parseFloat(cs.paddingTop) || 0, safeB = Math.max(parseFloat(cs.paddingBottom) || 0, full - seen);
+      var standalone = isStandalone();
+      if (standalone) {{
+        // A Home Screen app always covers the whole screen, but iOS can report the height short by the status bar
+        // (which left a dark strip at the bottom). Use the real screen height instead.
+        var portrait = window.innerHeight >= window.innerWidth;
+        var screenH = portrait ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
+        if (screenH > full) full = screenH;
+      }}
+      var safeT = parseFloat(cs.paddingTop) || 0, safeB = Math.max(parseFloat(cs.paddingBottom) || 0, standalone ? 0 : full - seen);
       return {{ frameW: Math.round(window.innerWidth), frameH: Math.round(full), safeTop: Math.round(safeT), safeBottom: Math.round(safeB) }};
     }}
     return {{ frameW: APP_W, frameH: APP_H, safeTop: 0, safeBottom: 0 }};
