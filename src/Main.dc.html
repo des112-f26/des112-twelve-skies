@@ -791,7 +791,7 @@ a{color:inherit}a:hover{color:inherit}
           </span>
         </div>
         <div aria-hidden="true" style="position: absolute; top: 0; left: calc(22px + (100% - 44px) * {{nowP}}); width: 0; height: 0; opacity: {{nowMarkOpacity}}; transition: opacity 0.5s ease">
-          <span style="position: absolute; left: 0; top: 0; transform: translateX(-50%); height: 18px; padding: 0 8px; border-radius: 999px; display: flex; align-items: center; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; white-space: nowrap; background: #FFFFFF; color: #1C122A; box-shadow: 0 2px 8px rgba(30,15,60,0.2); gap: 4px"><span class="liveDot" style="width: 5px; height: 5px; border-radius: 50%; background: #1C122A; display: inline-block"></span>NOW {{nowShort}}</span>
+          <span style="position: absolute; left: 0; top: 0; transform: translateX(calc(-50% + {{nowTagShift}}px)); height: 18px; padding: 0 8px; border-radius: 999px; display: flex; align-items: center; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; white-space: nowrap; background: #FFFFFF; color: #1C122A; box-shadow: 0 2px 8px rgba(30,15,60,0.2); gap: 4px"><span class="liveDot" style="width: 5px; height: 5px; border-radius: 50%; background: #1C122A; display: inline-block"></span>NOW {{nowShort}}</span>
           <span style="position: absolute; left: -1px; top: 18px; width: 2px; height: 50px; background: #FFFFFF; box-shadow: 0 0 0 1px rgba(28,18,42,0.25), 0 0 8px rgba(255,255,255,0.9)"></span>
         </div>
         <div aria-hidden="true" style="position: absolute; top: 43px; left: calc(22px + (100% - 44px) * {{thumbP}}); width: 32px; height: 62px; margin: -31px 0 0 -16px; opacity: {{pulseOpacity}}; transition: opacity 0.4s ease">
@@ -807,7 +807,7 @@ a{color:inherit}a:hover{color:inherit}
             </sc-if>
           </span>
         </div>
-        <div class="bubble" aria-hidden="true" style="position: absolute; top: -24px; left: calc(22px + (100% - 44px) * {{thumbP}}); transform: translate(-50%, {{bubbleY}}px); opacity: {{bubbleOpacity}}; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; background: {{btnBg}}; color: {{btnInk}}"><span style="opacity: 0.7; font-weight: 500; margin-right: 4px">Selected</span>{{sliderText}}</div>
+        <div class="bubble" aria-hidden="true" style="position: absolute; top: -24px; left: calc(22px + (100% - 44px) * {{thumbP}}); transform: translate(calc(-50% + {{bubbleX}}px), {{bubbleY}}px); opacity: {{bubbleOpacity}}; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; background: {{btnBg}}; color: {{btnInk}}"><span style="opacity: 0.7; font-weight: 500; margin-right: 4px">Selected</span>{{sliderText}}</div>
         <input id="daySlider" class="daySlider" type="range" min="0" max="1439" step="1" value="{{sliderVal}}" onChange="{{onSlide}}" onPointerDown="{{dragOn}}" onPointerUp="{{dragOff}}" onPointerCancel="{{dragOff}}" onFocus="{{focusOn}}" onBlur="{{focusOff}}" aria-valuetext="{{sliderText}}" style="position: absolute; left: 0; right: 0; top: 4px; width: 100%; height: 76px; margin: 0; opacity: 0; touch-action: none; cursor: grab">
         <div style="position: absolute; left: 0; right: 0; top: 96px; height: 48px; display: {{segDisplay}}; gap: 6px">
           <sc-for list="{{segments}}" as="g" hint-placeholder-count="5">
@@ -2513,6 +2513,14 @@ class Component extends DCLogic {
     var washC = blend(w, 8);
     var phIdx = { Morning: 0, Afternoon: 1, Evening: 2, Night: 3 }[ph];
     var thumbP = m / 1439;
+    // The NOW tag steps aside when the slider handle comes close, so the two never overlap.
+    var tagTrack = W - 74 - 44, tagW = 86, nowX = nowM / 1439 * tagTrack, tagDx = clamp(thumbP, 0, 1) * tagTrack - nowX, nowTagShift = 0;
+    if (Math.abs(tagDx) < tagW / 2 + 18) {
+      var tagMin = -(22 + nowX) + 2, tagMax = tagTrack + 22 - nowX - tagW - 2;   // keep the tag inside the timeline
+      var tagL = Math.min(-tagW / 2, tagDx - 18 - tagW), tagR = Math.max(-tagW / 2, tagDx + 18);
+      var tagOff = tagDx >= 0 ? (tagL >= tagMin ? tagL : tagR) : (tagR <= tagMax ? tagR : tagL);
+      nowTagShift = Math.round(tagOff + tagW / 2);
+    }
     var interacting = this.state.dragging || this.state.focused;
     var nearNow = Math.abs(m - nowMinutes()) < 70;
     var sliderText = t.main + (t.ap ? ' ' + t.ap : '');
@@ -2813,6 +2821,7 @@ class Component extends DCLogic {
       realSkyDesc: realSky ? ('Sunrise ' + fmtClock(sol.rise, use24) + ' · Sunset ' + fmtClock(sol.set, use24) + ' · ' + place.name + ' · ' + moonName(phase)) : 'An ideal day: sunrise 6:15, sunset 6:45',
       toggleRealSky: () => { savePrefs({ realSky: !realSky }); this.setState({ realSky: !realSky }); },
       thumbP: clamp(thumbP, 0, 1).toFixed(4),
+      nowTagShift: nowTagShift,
       thumbScale: this.state.dragging ? '1.14' : '1',
       ringW: interacting ? 8 : 5,
       thumbGlow: css(glowC, 0.85),
@@ -2822,6 +2831,8 @@ class Component extends DCLogic {
       // near "now" the NOW tag already names the time, so the Selected bubble only shows while dragging there (it would otherwise rise into the header row)
       bubbleOpacity: (interacting || (!live && !nearNow)) ? '1' : '0',
       bubbleY: interacting ? (nearNow ? -26 : -6) : (!live && !nearNow) ? -6 : 4,
+      // the Selected bubble slides sideways just enough to stay inside the card and clear the Back to now button above it
+      bubbleX: (function () { var bw = 72 + String(sliderText).length * 7.2, cx = 22 + clamp(thumbP, 0, 1) * (W - 74 - 44); return Math.round(Math.max(-8 - (cx - bw / 2), Math.min(0, (W - 74 - 139 - 6) - (cx + bw / 2)))); })(),
       stripSun: stripArc(sol.rise, sol.set - sol.rise, 64), stripMoon: stripArc(moonRise, 744, 50),
       stripMidG: stripFor(STYLE_T, 1, warp, wkey), stripGlow: stripFor(STYLE_T, 1, warp, wkey),
       stripTop: stripFor(STYLE_T, 0, warp, wkey), stripBottom: stripFor(STYLE_T, 2, warp, wkey),
