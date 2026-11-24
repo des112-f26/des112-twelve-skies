@@ -55,9 +55,10 @@ page = f"""<!doctype html>
   /* ---- The app: fixed at iPhone size (390 x 844) on desktop ---- */
   #app {{ position: relative; overflow: hidden; flex-shrink: 0; width: 390px; height: 844px; }}
   /* ---- On a phone the app fills the screen ---- */
-  body.phone {{ position: fixed; inset: 0; overflow: hidden; overscroll-behavior: none; background: #1D1850; }}
+  body.phone {{ position: fixed; top: 0; left: 0; right: 0; height: 100vh; height: 100lvh; overflow: hidden; overscroll-behavior: none; background: #1D1850; }}   /* full screen, even behind the browser toolbar */
   body.phone .page {{ margin: 0; padding: 0; }}
   body.phone #brand {{ display: none; }}
+  #safe-probe {{ position: fixed; top: 0; left: 0; width: 0; height: 100vh; height: 100lvh; padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); visibility: hidden; pointer-events: none; }}   /* measures the notch, home bar and screen height */
   .noscript {{ color: #2B1D45; font: 16px/1.5 system-ui, sans-serif; padding: 24px; max-width: 420px; text-align: center; }}
 </style>
 </head>
@@ -66,6 +67,7 @@ page = f"""<!doctype html>
 <header id="brand"><img src="brand/twelve-skies-wordmark-light.svg" alt="Twelve Skies" width="233" height="44"></header>
 <main id="app" aria-label="Twelve Skies app"></main>
 </div>
+<div id="safe-probe" aria-hidden="true"></div>
 <noscript><p class="noscript">Twelve Skies needs JavaScript turned on.</p></noscript>
 <template id="dc-template">
 {template}
@@ -81,6 +83,7 @@ page = f"""<!doctype html>
   // Phones (and the Home Screen app) fill the screen. Everything else shows the app at exactly 390 x 844.
   var APP_W = 390, APP_H = 844;
   var app = document.getElementById('app');
+  var probe = document.getElementById('safe-probe');
   function isPhone() {{
     var standalone = window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches);
     var coarse = window.matchMedia && matchMedia('(pointer: coarse)').matches;
@@ -91,8 +94,15 @@ page = f"""<!doctype html>
     var phone = isPhone();
     document.body.classList.toggle('phone', phone);
     document.body.classList.toggle('show-brand', !phone && window.innerHeight >= APP_H + 48 + 64);
-    if (phone) return {{ frameW: Math.round(window.innerWidth), frameH: Math.round(window.innerHeight) }};
-    return {{ frameW: APP_W, frameH: APP_H }};
+    if (phone) {{
+      // The sky fills the whole screen, including behind Safari's toolbar. The content stays in the part you can see,
+      // clear of the notch / Dynamic Island at the top and the home bar or toolbar at the bottom.
+      var cs = getComputedStyle(probe);
+      var seen = window.innerHeight, full = Math.max(seen, parseFloat(cs.height) || 0);
+      var safeT = parseFloat(cs.paddingTop) || 0, safeB = Math.max(parseFloat(cs.paddingBottom) || 0, full - seen);
+      return {{ frameW: Math.round(window.innerWidth), frameH: Math.round(full), safeTop: Math.round(safeT), safeBottom: Math.round(safeB) }};
+    }}
+    return {{ frameW: APP_W, frameH: APP_H, safeTop: 0, safeBottom: 0 }};
   }}
   function size(f) {{ app.style.width = f.frameW + 'px'; app.style.height = f.frameH + 'px'; }}
   var params = new URLSearchParams(location.search);
@@ -101,7 +111,7 @@ page = f"""<!doctype html>
   if (params.get('screen')) props.startScreen = params.get('screen');   // e.g. ?screen=zodiac opens a page directly
   var appHandle = DCLite.start({{ template: document.getElementById('dc-template'), component: Component, mount: app, props: function () {{ return props; }} }});
   var t = null;
-  function onResize() {{ clearTimeout(t); t = setTimeout(function () {{ var nf = frame(); size(nf); appHandle.setProps(nf); }}, 80); }}
+  function onResize() {{ clearTimeout(t); t = setTimeout(function () {{ var nf = frame(); size(nf); Object.assign(props, nf); appHandle.setProps(nf); }}, 80); }}
   window.addEventListener('resize', onResize);
   window.addEventListener('orientationchange', onResize);
   if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
